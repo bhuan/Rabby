@@ -6,6 +6,7 @@ import { traceCallTracer, tracePrestateDiff } from './rpc/traceCall';
 import { extractNativeDeltas } from './decode/nativeDelta';
 import { extractErc20Deltas } from './decode/transferEvents';
 import { fetchManyTokenMeta } from './tokenMetadata/fetch';
+import { enrichBalanceChangePricing } from './pricing/enrich';
 import {
   synthesizeFailedBalanceChange,
   synthesizeContractBalanceChange,
@@ -47,6 +48,7 @@ const failedSimulationResult = (
   }),
   version: 'v1',
   source: 'local-trace',
+  pricingSource: 'none',
 });
 
 export const simulate = async (
@@ -103,11 +105,17 @@ export const simulate = async (
       log('bail: native synthesize returned null (user not in deltas?)');
       return null;
     }
-    log('ok: native', balanceChange);
-    return {
+    const priced = await enrichBalanceChangePricing({
+      chain,
+      userAddress,
       balanceChange,
+    });
+    log('ok: native', priced);
+    return {
+      balanceChange: priced.balanceChange,
       version: 'v1',
       source: 'local-trace',
+      pricingSource: priced.pricingSource,
     };
   }
 
@@ -165,11 +173,17 @@ export const simulate = async (
     erc20Deltas: userErc20,
     metaByToken,
   });
-  log('ok: contract', balanceChange);
-  return {
+  const priced = await enrichBalanceChangePricing({
+    chain,
+    userAddress,
     balanceChange,
+  });
+  log('ok: contract', priced);
+  return {
+    balanceChange: priced.balanceChange,
     version: 'v1',
     source: 'local-trace',
+    pricingSource: priced.pricingSource,
   };
 };
 

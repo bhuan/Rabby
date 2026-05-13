@@ -1,6 +1,8 @@
 import { Tx, BalanceChange } from '@rabby-wallet/rabby-api/dist/types';
 import BigNumber from 'bignumber.js';
 
+export type LocalSimulationPricingSource = 'none' | 'rabby-openapi';
+
 export type TraceResult<T> =
   | { kind: 'ok'; value: T }
   | { kind: 'error'; message: string; code?: number };
@@ -15,6 +17,7 @@ export interface LocalSimulationResult {
   balanceChange: BalanceChange;
   version: 'v1';
   source: 'local-trace';
+  pricingSource: LocalSimulationPricingSource;
 }
 
 export interface PrestateDiff {
