@@ -23,8 +23,7 @@ const isEmptyData = (data?: string) => !data || data === '0x' || data === '0x0';
 // when triaging a sim issue.
 const log = (...args: unknown[]) => {
   if (
-    (globalThis as { __rabbyDebugLocalSim__?: boolean })
-      .__rabbyDebugLocalSim__
+    (globalThis as { __rabbyDebugLocalSim__?: boolean }).__rabbyDebugLocalSim__
   ) {
     console.info('[local-sim]', ...args);
   }

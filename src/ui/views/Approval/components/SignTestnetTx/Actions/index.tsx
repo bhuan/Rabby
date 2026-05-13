@@ -27,6 +27,7 @@ import Loading from '../../TxComponents/Loading';
 import ViewRawModal from '../../TxComponents/ViewRawModal';
 import { TestnetUnknownAction } from './UnknownAction';
 import { Account } from '@/background/service/preference';
+import type { LocalSimulationResult } from '@/background/service/localSimulation';
 
 export const SignTitle = styled.div`
   display: flex;
@@ -63,6 +64,7 @@ export const TestnetActions = ({
   originLogo,
   origin,
   account,
+  simulation,
 }: {
   data: ParsedTransactionActionData;
   requireData: ActionRequireData;
@@ -74,6 +76,7 @@ export const TestnetActions = ({
   originLogo?: string;
   origin: string;
   account: Account;
+  simulation?: LocalSimulationResult | null;
 }) => {
   const actionName = useMemo(() => {
     return getActionTypeText(data);
@@ -98,7 +101,15 @@ export const TestnetActions = ({
         <Card>
           <OriginInfo chain={chain} origin={origin} originLogo={originLogo} />
           <Divide />
-          <BalanceChange version="v0" />
+          {simulation ? (
+            <BalanceChange
+              version={simulation.version}
+              data={simulation.balanceChange}
+              hideUsdValue={simulation.pricingSource === 'none'}
+            />
+          ) : (
+            <BalanceChange version="v0" />
+          )}
         </Card>
 
         {/* <TestnetUnknownAction raw={raw} /> */}

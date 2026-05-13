@@ -175,6 +175,7 @@ const Actions = ({
   originLogo,
   account,
   multiAction,
+  hideBalanceChangeUsdValue,
 }: {
   data: ParsedTransactionActionData;
   requireData: ActionRequireData;
@@ -188,6 +189,7 @@ const Actions = ({
   originLogo?: string;
   account: Account;
   multiAction?: MultiActionProps;
+  hideBalanceChangeUsdValue?: boolean;
 }) => {
   const isMultiAction = useMemo(() => {
     return !!multiAction;
@@ -208,6 +210,7 @@ const Actions = ({
             balanceChange={txDetail.balance_change}
             preExecSuccess={txDetail.pre_exec.success}
             preExecVersion={txDetail.pre_exec_version}
+            hideUsdValue={hideBalanceChangeUsdValue}
           />
         </Card>
         {isMultiAction && multiAction ? (

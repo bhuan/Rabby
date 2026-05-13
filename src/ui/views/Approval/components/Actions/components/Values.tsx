@@ -17,6 +17,7 @@ import IconEdit from 'ui/assets/editpen.svg';
 import IconSuccess from 'ui/assets/success.svg';
 import IconScam from 'ui/assets/sign/tx/token-scam.svg';
 import IconFake from 'ui/assets/sign/tx/token-fake.svg';
+import IconUnverified from 'ui/assets/sign/tx/question-mark.svg';
 import { ReactComponent as IconAddressCopy } from 'ui/assets/icon-copy-cc.svg';
 import { ReactComponent as IconExternal } from 'ui/assets/icon-share-currentcolor.svg';
 import { ReactComponent as IconArrowRight } from 'ui/assets/sign/arrow-right-lite.svg';
@@ -278,15 +279,21 @@ const Protocol = ({
 const TokenLabel = ({
   isScam,
   isFake,
+  isUnverified,
 }: {
   isScam: boolean;
   isFake: boolean;
+  // Neutral "we don't know this token" badge — distinct from isFake (DeBank
+  // flagged the token as an imposter). Use for tokens whose metadata was
+  // read from chain but isn't in any catalog (e.g. local-trace sims on
+  // testnet or uncataloged mainnet contracts).
+  isUnverified?: boolean;
 }) => {
   const { t } = useTranslation();
   return (
     <div
       className={clsx('flex gap-4 shrink-0 relative', {
-        'ml-4': isScam || isFake,
+        'ml-4': isScam || isFake || isUnverified,
       })}
     >
       {isFake && (
@@ -305,6 +312,18 @@ const TokenLabel = ({
           title={t('page.signTx.scamTokenAlert')}
         >
           <img src={IconScam} className="icon icon-scam w-14" />
+        </TooltipWithMagnetArrow>
+      )}
+      {isUnverified && !isFake && !isScam && (
+        <TooltipWithMagnetArrow
+          inApproval
+          overlayClassName="rectangle w-[max-content]"
+          title={t('page.signTx.unverifiedTokenAlert')}
+        >
+          <img
+            src={IconUnverified}
+            className="icon icon-unverified w-12 opacity-60"
+          />
         </TooltipWithMagnetArrow>
       )}
     </div>

@@ -42,6 +42,7 @@ import clsx from 'clsx';
 import { Modal } from 'antd';
 import { ga4 } from '@/utils/ga4';
 import { TestnetActions } from './Actions';
+import type { LocalSimulationResult } from '@/background/service/localSimulation';
 import {
   ActionRequireData,
   fetchActionRequiredData,
@@ -590,6 +591,17 @@ export const SignTestnetTx = ({
           sender: tx.from,
         });
 
+        let simulation: LocalSimulationResult | null = null;
+        try {
+          simulation = await wallet.simulateLocally({
+            chainId: chain.id,
+            tx,
+            userAddress: currentAccount.address,
+          });
+        } catch (e) {
+          console.error('local simulation failed', e);
+        }
+
         const cexInfo = await getCexInfo(parsed.send?.to || '', wallet);
         const requiredData = await fetchActionRequiredData({
           type: 'transaction',
@@ -620,6 +632,7 @@ export const SignTestnetTx = ({
         return {
           actionData: parsed,
           requiredData,
+          simulation,
         };
       } catch (e) {
         console.error(e);
@@ -894,6 +907,7 @@ export const SignTestnetTx = ({
           account={currentAccount}
           data={explainResult?.actionData || {}}
           requireData={explainResult?.requiredData || null}
+          simulation={explainResult?.simulation || null}
           isReady={isReady}
           chain={chain}
           raw={{

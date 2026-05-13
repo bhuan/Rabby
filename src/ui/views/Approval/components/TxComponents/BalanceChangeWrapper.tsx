@@ -9,6 +9,7 @@ interface Props {
   preExecSuccess?: boolean;
   balanceChange?: BalanceChangeType;
   preExecVersion?: 'v0' | 'v1' | 'v2';
+  hideUsdValue?: boolean;
 }
 
 export const BalanceChangeWrapper: React.FC<Props> = ({
@@ -16,10 +17,12 @@ export const BalanceChangeWrapper: React.FC<Props> = ({
   balanceChange,
   preExecSuccess,
   preExecVersion = 'v2',
+  hideUsdValue,
 }) => {
   const notShowBalanceChange = React.useMemo(() => {
     if (!data) {
       if (!balanceChange) return true;
+      if (balanceChange.error) return false;
       if (
         balanceChange.receive_nft_list.length +
           balanceChange.receive_token_list.length +
@@ -60,12 +63,16 @@ export const BalanceChangeWrapper: React.FC<Props> = ({
       }
     }
     return false;
-  }, [data]);
+  }, [balanceChange, data, preExecSuccess]);
 
   return notShowBalanceChange || !balanceChange ? null : (
     <>
       <Divide />
-      <BalanceChange version={preExecVersion} data={balanceChange} />
+      <BalanceChange
+        version={preExecVersion}
+        data={balanceChange}
+        hideUsdValue={hideUsdValue}
+      />
     </>
   );
 };

@@ -293,6 +293,7 @@
       "importedAddress": "Imported address",
       "fakeTokenAlert": "This is a scam token marked by Rabby",
       "scamTokenAlert": "This is potentially a low-quality and scam token based on Rabby's detection",
+      "unverifiedTokenAlert": "Unverified token. Symbol and decimals were read directly from the contract; Rabby couldn't confirm it against its catalog.",
       "trusted": "Trusted",
       "blocked": "Blocked",
       "noMark": "No mark",
