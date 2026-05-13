@@ -17,6 +17,7 @@ import {
   TxPushType,
 } from 'background/service/openapi';
 import { findChain } from './chain';
+import { shouldWarnReservedGasLimitTooHigh } from './gasGuards';
 import type { WalletControllerType } from '@/ui/utils';
 import { Chain } from '@debank/common';
 import i18n from '@/i18n';
@@ -572,6 +573,20 @@ export const checkGasAndNonce = ({
         });
       }
     }
+  }
+  if (
+    !isGnosisAccount &&
+    shouldWarnReservedGasLimitTooHigh({
+      chainId: tx.chainId,
+      gasLimit,
+      recommendGasLimit,
+    })
+  ) {
+    errors.push({
+      code: 3007,
+      msg: i18n.t('page.signTx.gasLimitMuchHigherThanGasUsed'),
+      level: 'warn',
+    });
   }
   const balanceRawAmount = rawAmountToBn(nativeTokenBalance || 0);
   const sendNativeTokenRawAmount = checkTxValueInBalance

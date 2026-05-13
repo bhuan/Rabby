@@ -40,6 +40,12 @@ interface GasSelectorProps {
   disabled?: boolean;
   manuallyChangeGasLimit: boolean;
   recommendRatio?: number;
+  /**
+   * Optional warning string surfaced beneath the gas-limit input — e.g. the
+   * Monad-only "gasLimit > 10x estimate" alert. Renders only when set and
+   * the input itself isn't in an error state.
+   */
+  gasLimitWarning?: string | null;
 }
 
 export const SignAdvancedSettings = ({
@@ -53,6 +59,7 @@ export const SignAdvancedSettings = ({
   disabled,
   manuallyChangeGasLimit,
   recommendRatio = DEFAULT_GAS_LIMIT_RATIO,
+  gasLimitWarning,
 }: GasSelectorProps) => {
   const gasLimitInputRef = React.useRef<InputRef>(null);
   const [visible, setVisible] = React.useState(false);
@@ -235,26 +242,33 @@ export const SignAdvancedSettings = ({
                     {validateStatus.gasLimit.message}
                   </p>
                 ) : (
-                  <p className={clsx('tip', { disabled: disabled })}>
-                    <Trans
-                      i18nKey="page.signTx.recommendGasLimitTip"
-                      values={{
-                        est: Number(recommendGasLimit),
-                        current: new BigNumber(afterGasLimit)
-                          .div(recommendGasLimit)
-                          .toFixed(3)
-                          .replace(/0+$/, '')
-                          .replace(/\.$/, ''),
-                      }}
-                    />
-                    <span
-                      className="recommend-times"
-                      onClick={handleSetRecommendTimes}
-                    >
-                      {recommendRatio}x
-                    </span>
-                    .
-                  </p>
+                  <>
+                    <p className={clsx('tip', { disabled: disabled })}>
+                      <Trans
+                        i18nKey="page.signTx.recommendGasLimitTip"
+                        values={{
+                          est: Number(recommendGasLimit),
+                          current: new BigNumber(afterGasLimit)
+                            .div(recommendGasLimit)
+                            .toFixed(3)
+                            .replace(/0+$/, '')
+                            .replace(/\.$/, ''),
+                        }}
+                      />
+                      <span
+                        className="recommend-times"
+                        onClick={handleSetRecommendTimes}
+                      >
+                        {recommendRatio}x
+                      </span>
+                      .
+                    </p>
+                    {gasLimitWarning && (
+                      <p className="tip text-r-orange-default not-italic">
+                        {gasLimitWarning}
+                      </p>
+                    )}
+                  </>
                 )}
                 <div className={clsx({ 'opacity-50': disableNonce })}>
                   <p className="gas-limit-title mt-20 mb-0 leading-[16px]">

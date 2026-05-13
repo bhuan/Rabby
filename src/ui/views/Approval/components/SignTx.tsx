@@ -2693,6 +2693,10 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
             nonce={realNonce || tx.nonce}
             disableNonce={isSpeedUp || isCancel}
             manuallyChangeGasLimit={manuallyChangeGasLimit}
+            gasLimitWarning={
+              checkErrors.find((e) => e.code === 3007 && e.level === 'warn')
+                ?.msg || null
+            }
           />
         ) : null}
 

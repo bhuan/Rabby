@@ -51,6 +51,7 @@ import {
 import * as Sentry from '@sentry/browser';
 import { getCexInfo } from '@/ui/models/exchange';
 import { useSetReportGasLevel } from '@/ui/hooks/useSetReportGasLevel';
+import { shouldWarnReservedGasLimitTooHigh } from '@/utils/gasGuards';
 
 const checkGasAndNonce = ({
   recommendGasLimitRatio,
@@ -120,6 +121,20 @@ const checkGasAndNonce = ({
         });
       }
     }
+  }
+  if (
+    !isGnosisAccount &&
+    shouldWarnReservedGasLimitTooHigh({
+      chainId: tx.chainId,
+      gasLimit,
+      recommendGasLimit,
+    })
+  ) {
+    errors.push({
+      code: 3007,
+      msg: i18n.t('page.signTx.gasLimitMuchHigherThanGasUsed'),
+      level: 'warn',
+    });
   }
   let sendNativeTokenAmount = new BigNumber(tx.value); // current transaction native token transfer count
   sendNativeTokenAmount = isNaN(sendNativeTokenAmount.toNumber())
@@ -903,6 +918,10 @@ export const SignTestnetTx = ({
             disableNonce={isSpeedUp || isCancel}
             manuallyChangeGasLimit={false}
             recommendRatio={recommendRatio}
+            gasLimitWarning={
+              checkErrors.find((e) => e.code === 3007 && e.level === 'warn')
+                ?.msg || null
+            }
           />
         )}
 
