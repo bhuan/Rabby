@@ -91,6 +91,11 @@
       "gasLimitNotEnough": "Gas limit is less than 21000. Transaction can't be submitted",
       "gasLimitLessThanExpect": "Gas limit is low. There is 1% chance that the transaction may fail.",
       "gasLimitLessThanGasUsed": "Gas limit is too low. There is 95% chance that the transaction may fail.",
+      "gasLimitMuchHigherThanGasUsed": "Gas limit is more than 10x the network's estimate. Monad bills the reserved gas limit in full — excess is not refunded. Open Advanced Settings below to lower it.",
+      "gasOverspend": {
+        "title": "Gas limit looks very high",
+        "ack": "I understand — submit anyway"
+      },
       "nativeTokenNotEngouthForGas": "Gas balance is not enough for transaction",
       "nonceLowerThanExpect": "Nonce is too low, the minimum should be {{0}}",
       "canOnlyUseImportedAddress": "You cannot sign transactions with a watch-only address.",
@@ -292,6 +297,7 @@
       "importedAddress": "Imported address",
       "fakeTokenAlert": "This is a scam token marked by Rabby",
       "scamTokenAlert": "This is potentially a low-quality and scam token based on Rabby's detection",
+      "unverifiedTokenAlert": "Unverified token. Symbol and decimals were read directly from the contract; Rabby couldn't confirm it against its catalog.",
       "trusted": "Trusted",
       "blocked": "Blocked",
       "noMark": "No mark",

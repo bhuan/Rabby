@@ -150,12 +150,14 @@ const NFTBalanceChange = ({
 const BalanceChange = ({
   data,
   version,
+  hideUsdValue,
 }: {
   data?: IBalanceChange;
   isSupport?: boolean;
   isGnosis?: boolean;
   chainEnum?: CHAINS_ENUM;
   version: 'v0' | 'v1' | 'v2';
+  hideUsdValue?: boolean;
 }) => {
   const dispatch = useRabbyDispatch();
   const { t } = useTranslation();
@@ -183,6 +185,7 @@ const BalanceChange = ({
     const receiveTokenList = data.receive_token_list;
     const sendTokenList = data.send_token_list;
     const showUsdValueDiff =
+      !hideUsdValue &&
       data.receive_nft_list.length <= 0 &&
       data.send_nft_list.length <= 0 &&
       (data.send_token_list.length > 0 || data.receive_token_list.length > 0);
@@ -191,7 +194,7 @@ const BalanceChange = ({
       sendTokenList,
       showUsdValueDiff,
     };
-  }, [data]);
+  }, [data, hideUsdValue]);
 
   const handleClickToken = (t: TokenItem) => {
     dispatch.sign.openTokenDetailPopup(t);
@@ -207,38 +210,24 @@ const BalanceChange = ({
     );
   }
 
-  if (version === 'v1' && data?.error) {
-    return (
-      <div className="token-balance-change">
-        <HeadlineStyled>
-          {isSuccess
-            ? t('page.signTx.balanceChange.successTitle')
-            : t('page.signTx.balanceChange.failedTitle')}
-        </HeadlineStyled>
-        <div className="token-balance-change-content">
-          <Table>
-            <Col className="py-10">
-              <Row isTitle>
-                <span className="text-14 text-r-neutral-title-1 font-medium">
-                  {t('page.signTx.balanceChange.errorTitle')}
-                </span>
-              </Row>
-            </Col>
-          </Table>
-        </div>
-      </div>
-    );
-  }
-
   if (!data) {
     return null;
   }
+  // For v1+error we fall through to the main render: it shows
+  // "Tx failed: (msg) #code" via the data.error row below, which surfaces
+  // the real revert reason instead of the generic "Fail to fetch" message.
 
   return (
     <div className="token-balance-change">
       <HeadlineStyled>
-        <span>{t('page.signTx.balanceChange.successTitle')}</span>
-        {showUsdValueDiff && (
+        <span>
+          {t(
+            data.error
+              ? 'page.signTx.balanceChange.failedTitle'
+              : 'page.signTx.balanceChange.successTitle'
+          )}
+        </span>
+        {showUsdValueDiff && !data.error && (
           <span className="flex-1 whitespace-nowrap overflow-hidden overflow-ellipsis text-r-title-1 text-right text-14 font-normal">
             {`${data.usd_value_change >= 0 ? '+' : '-'} $${formatNumber(
               Math.abs(data.usd_value_change)
@@ -308,16 +297,19 @@ const BalanceChange = ({
                       isScam={
                         token.is_verified !== false && !!token.is_suspicious
                       }
+                      isUnverified={token.is_verified == null}
                     />
                   }
                 />
               </Row>
-              <Row className="text-r-neutral-body text-14 font-normal flex-initial">
-                ≈{' '}
-                {formatUsdValue(
-                  new BigNumber(token.amount).times(token.price).toFixed()
-                )}
-              </Row>
+              {!hideUsdValue && (
+                <Row className="text-r-neutral-body text-14 font-normal flex-initial">
+                  ≈{' '}
+                  {formatUsdValue(
+                    new BigNumber(token.amount).times(token.price).toFixed()
+                  )}
+                </Row>
+              )}
             </Col>
           ))}
           {receiveTokenList?.map((token) => (
@@ -350,17 +342,20 @@ const BalanceChange = ({
                       isScam={
                         token.is_verified !== false && !!token.is_suspicious
                       }
+                      isUnverified={token.is_verified == null}
                     />
                   }
                 />
               </Row>
 
-              <Row className="text-r-neutral-body text-14 font-normal flex-initial">
-                ≈{' '}
-                {formatUsdValue(
-                  new BigNumber(token.amount).times(token.price).toFixed()
-                )}
-              </Row>
+              {!hideUsdValue && (
+                <Row className="text-r-neutral-body text-14 font-normal flex-initial">
+                  ≈{' '}
+                  {formatUsdValue(
+                    new BigNumber(token.amount).times(token.price).toFixed()
+                  )}
+                </Row>
+              )}
             </Col>
           ))}
           <NFTBalanceChange type="send" data={data}></NFTBalanceChange>

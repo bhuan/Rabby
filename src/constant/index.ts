@@ -1265,21 +1265,14 @@ export const KEYRING_CATEGORY_MAP = {
 
 export const SWAP_FEE_PRECISION = 1e5;
 
-export const DEFAULT_GAS_LIMIT_RATIO = 1.5;
-
-export const SAFE_GAS_LIMIT_RATIO = {
-  '1284': 2,
-  '1285': 2,
-  '1287': 2,
-};
-
-export const SAFE_GAS_LIMIT_BUFFER = {
-  '996': 0.86,
-  '49088': 0.86,
-  '3068': 0.86,
-};
-
-export const DEFAULT_GAS_LIMIT_BUFFER = 0.95;
+// Re-exported from a leaf module (./gasRatios) so utilities and tests can
+// pick them up without booting the full chain registry that index.ts loads.
+export {
+  DEFAULT_GAS_LIMIT_RATIO,
+  SAFE_GAS_LIMIT_RATIO,
+  SAFE_GAS_LIMIT_BUFFER,
+  DEFAULT_GAS_LIMIT_BUFFER,
+} from './gasRatios';
 
 export const GAS_TOP_UP_ADDRESS = '0x7559e1bbe06e94aeed8000d5671ed424397d25b5';
 export const GAS_TOP_UP_PAY_ADDRESS =

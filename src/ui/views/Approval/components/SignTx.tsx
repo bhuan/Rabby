@@ -78,6 +78,8 @@ import { useEnterPassphraseModal } from '@/ui/hooks/useEnterPassphraseModal';
 import { findChain, isTestnet } from '@/utils/chain';
 import { SignTestnetTx } from './SignTestnetTx';
 import { SignAdvancedSettings } from './SignAdvancedSettings';
+import { GasOverspendBanner } from './GasOverspendBanner';
+import { useGasOverspendAck } from './useGasOverspendAck';
 import { GasSelectorResponse } from './TxComponents/GasSelectorHeader';
 import SignMainnetGasSelectorHeader from './TxComponents/GasSelector/SignMainnetGasSelectorHeader';
 import { useEffectiveApprovalGasMethod } from './TxComponents/GasSelector/useEffectiveApprovalGasMethod';
@@ -236,6 +238,7 @@ export const TxTypeComponent = ({
   originLogo,
   account,
   multiAction,
+  hideBalanceChangeUsdValue,
 }: {
   actionRequireData: ActionRequireData;
   actionData: ParsedTransactionActionData;
@@ -250,6 +253,7 @@ export const TxTypeComponent = ({
   originLogo?: string;
   account: Account;
   multiAction?: MultiActionProps;
+  hideBalanceChangeUsdValue?: boolean;
 }) => {
   if (!isReady) return <Loading />;
   if (multiAction || (actionData && actionRequireData)) {
@@ -267,6 +271,7 @@ export const TxTypeComponent = ({
         origin={origin}
         originLogo={originLogo}
         multiAction={multiAction}
+        hideBalanceChangeUsdValue={hideBalanceChangeUsdValue}
       />
     );
   }
@@ -433,6 +438,9 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
   const [gasUsed, setGasUsed] = useState(0);
   const [recommendGasLimitRatio, setRecommendGasLimitRatio] = useState(1); // 1 / 1.5 / 2
   const [recommendNonce, setRecommendNonce] = useState<string>('');
+  const [hideBalanceChangeUsdValue, setHideBalanceChangeUsdValue] = useState(
+    false
+  );
   const [updateId, setUpdateId] = useState(0);
   const [txDetail, setTxDetail] = useState<ExplainTxResponse | null>({
     pre_exec_version: 'v0',
@@ -862,6 +870,8 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
     return checkErrors.some((e) => e.code === 3001);
   }, [checkErrors]);
 
+  const gasOverspendAck = useGasOverspendAck({ gasLimit, checkErrors });
+
   const isSupportedAddr = useMemo(() => {
     const isNotWalletConnect =
       currentAccountType !== KEYRING_TYPE.WalletConnectKeyring;
@@ -1183,6 +1193,39 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
       pending_tx_list: await pendingTxListPromise,
       delegate_call: delegateCall,
     });
+
+    // Local-trace fallback: when DeBank stamps pre_exec_version v0 for a
+    // chain that opts into local simulation (e.g. Monad mainnet), run our
+    // RPC-based pipeline and overlay the result onto `res` so the existing
+    // BalanceChange + Actions UI render real data instead of the v0 cliff.
+    if (res.pre_exec_version === 'v0') {
+      setHideBalanceChangeUsdValue(false);
+      try {
+        const localSim = await wallet.simulateLocally({
+          chainId: chain.id,
+          tx,
+          userAddress: address,
+        });
+        if (localSim) {
+          res.balance_change = localSim.balanceChange;
+          res.pre_exec_version = localSim.version;
+          // Mirror sim success/error onto pre_exec so downstream consumers
+          // (setPreprocessSuccess, signing stats, BalanceChangeWrapper) see
+          // the local-sim outcome instead of DeBank's stale v0 value — which
+          // can otherwise mark a successful sim as failed, or hide a real
+          // revert for approval/revoke flows with empty token lists.
+          if (res.pre_exec) {
+            res.pre_exec.success = localSim.balanceChange.success;
+            res.pre_exec.error = localSim.balanceChange.error || null;
+          }
+          setHideBalanceChangeUsdValue(localSim.pricingSource === 'none');
+        }
+      } catch (e) {
+        console.error('local simulation failed', e);
+      }
+    } else {
+      setHideBalanceChangeUsdValue(false);
+    }
 
     let estimateGas = 0;
     if (res.gas.success) {
@@ -2646,6 +2689,7 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
                       }
                     : undefined
                 }
+                hideBalanceChangeUsdValue={hideBalanceChangeUsdValue}
               />
             )}
 
@@ -2681,6 +2725,14 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
             }}
           />
         ) : null}
+
+        {isReady && gasOverspendAck.warning && (
+          <GasOverspendBanner
+            message={gasOverspendAck.warning}
+            acknowledged={gasOverspendAck.acknowledged}
+            onChange={gasOverspendAck.setAcknowledged}
+          />
+        )}
 
         {!isGnosisAccount && !isCoboArugsAccount && txDetail && isReady ? (
           <SignAdvancedSettings
@@ -2907,6 +2959,7 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
               !canProcess ||
               !!checkErrors.find((item) => item.level === 'forbidden') ||
               hasUnProcessSecurityResult ||
+              gasOverspendAck.blockSubmit ||
               (isGnosisAccount &&
                 new BigNumber(realNonce || 0).isLessThan(safeInfo?.nonce || 0))
             }

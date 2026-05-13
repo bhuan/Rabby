@@ -22,6 +22,7 @@ import {
   KEYRING_TYPE,
   MINIMUM_GAS_LIMIT,
   SAFE_GAS_LIMIT_BUFFER,
+  SAFE_GAS_LIMIT_RATIO,
 } from '@/constant';
 import { useEnterPassphraseModal } from '@/ui/hooks/useEnterPassphraseModal';
 import { GasLevel, Tx } from '@rabby-wallet/rabby-api/dist/types';
@@ -37,10 +38,13 @@ import GasSelectorHeader, {
 import { MessageWrapper } from '../TextActions';
 import { Card } from '../Card';
 import { SignAdvancedSettings } from '../SignAdvancedSettings';
+import { GasOverspendBanner } from '../GasOverspendBanner';
+import { useGasOverspendAck } from '../useGasOverspendAck';
 import clsx from 'clsx';
 import { Modal } from 'antd';
 import { ga4 } from '@/utils/ga4';
 import { TestnetActions } from './Actions';
+import type { LocalSimulationResult } from '@/background/service/localSimulation';
 import {
   ActionRequireData,
   fetchActionRequiredData,
@@ -50,6 +54,7 @@ import {
 import * as Sentry from '@sentry/browser';
 import { getCexInfo } from '@/ui/models/exchange';
 import { useSetReportGasLevel } from '@/ui/hooks/useSetReportGasLevel';
+import { shouldWarnReservedGasLimitTooHigh } from '@/utils/gasGuards';
 
 const checkGasAndNonce = ({
   recommendGasLimitRatio,
@@ -120,6 +125,20 @@ const checkGasAndNonce = ({
       }
     }
   }
+  if (
+    !isGnosisAccount &&
+    shouldWarnReservedGasLimitTooHigh({
+      chainId: tx.chainId,
+      gasLimit,
+      recommendGasLimit,
+    })
+  ) {
+    errors.push({
+      code: 3007,
+      msg: i18n.t('page.signTx.gasLimitMuchHigherThanGasUsed'),
+      level: 'warn',
+    });
+  }
   let sendNativeTokenAmount = new BigNumber(tx.value); // current transaction native token transfer count
   sendNativeTokenAmount = isNaN(sendNativeTokenAmount.toNumber())
     ? new BigNumber(0)
@@ -186,6 +205,7 @@ const useCheckGasAndNonce = ({
       isSpeedUp,
       isGnosisAccount,
       nativeTokenBalance,
+      recommendGasLimitRatio,
     ]
   );
 };
@@ -308,8 +328,14 @@ export const SignTestnetTx = ({
         let recommendGasLimit = estimateGas;
 
         if (!gasLimit) {
+          const isNativeTransfer =
+            (!tx.data || tx.data === '0x' || tx.data === '0x0') &&
+            new BigNumber(estimateGas).eq(21000);
+          const ratio = isNativeTransfer
+            ? 1
+            : SAFE_GAS_LIMIT_RATIO[chainId] || DEFAULT_GAS_LIMIT_RATIO;
           recommendGasLimit = new BigNumber(estimateGas)
-            .times(DEFAULT_GAS_LIMIT_RATIO)
+            .times(ratio)
             .toFixed(0);
 
           if (
@@ -567,6 +593,17 @@ export const SignTestnetTx = ({
           sender: tx.from,
         });
 
+        let simulation: LocalSimulationResult | null = null;
+        try {
+          simulation = await wallet.simulateLocally({
+            chainId: chain.id,
+            tx,
+            userAddress: currentAccount.address,
+          });
+        } catch (e) {
+          console.error('local simulation failed', e);
+        }
+
         const cexInfo = await getCexInfo(parsed.send?.to || '', wallet);
         const requiredData = await fetchActionRequiredData({
           type: 'transaction',
@@ -597,6 +634,7 @@ export const SignTestnetTx = ({
         return {
           actionData: parsed,
           requiredData,
+          simulation,
         };
       } catch (e) {
         console.error(e);
@@ -835,6 +873,13 @@ export const SignTestnetTx = ({
     });
   };
 
+  const isNativeTransferEstimate =
+    (!tx.data || tx.data === '0x' || tx.data === '0x0') &&
+    new BigNumber(gasUsed || 0).eq(21000);
+  const recommendRatio = isNativeTransferEstimate
+    ? 1
+    : SAFE_GAS_LIMIT_RATIO[chainId] || DEFAULT_GAS_LIMIT_RATIO;
+
   const checkErrors = useCheckGasAndNonce({
     recommendGasLimit: gasUsed || 0,
     recommendNonce: recommendNonce || '',
@@ -848,10 +893,12 @@ export const SignTestnetTx = ({
     tx,
     isGnosisAccount: isGnosisAccount || isCoboArugsAccount,
     nativeTokenBalance,
-    recommendGasLimitRatio: 1.5,
+    recommendGasLimitRatio: recommendRatio,
   });
 
   useSetReportGasLevel(selectedGas?.level);
+
+  const gasOverspendAck = useGasOverspendAck({ gasLimit, checkErrors });
 
   if (!chain) {
     return null;
@@ -864,6 +911,7 @@ export const SignTestnetTx = ({
           account={currentAccount}
           data={explainResult?.actionData || {}}
           requireData={explainResult?.requiredData || null}
+          simulation={explainResult?.simulation || null}
           isReady={isReady}
           chain={chain}
           raw={{
@@ -877,6 +925,14 @@ export const SignTestnetTx = ({
           onChange={handleTxChange}
         />
 
+        {isReady && gasOverspendAck.warning && (
+          <GasOverspendBanner
+            message={gasOverspendAck.warning}
+            acknowledged={gasOverspendAck.acknowledged}
+            onChange={gasOverspendAck.setAcknowledged}
+          />
+        )}
+
         {isReady && (
           <SignAdvancedSettings
             isReady={isReady}
@@ -887,6 +943,7 @@ export const SignTestnetTx = ({
             nonce={realNonce || tx.nonce}
             disableNonce={isSpeedUp || isCancel}
             manuallyChangeGasLimit={false}
+            recommendRatio={recommendRatio}
           />
         )}
 
@@ -976,7 +1033,8 @@ export const SignTestnetTx = ({
           isGnosisAccount ||
           isCoboArugsAccount ||
           !canProcess ||
-          !!checkErrors.find((item) => item.level === 'forbidden')
+          !!checkErrors.find((item) => item.level === 'forbidden') ||
+          gasOverspendAck.blockSubmit
         }
         account={currentAccount}
       />

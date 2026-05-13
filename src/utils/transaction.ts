@@ -17,6 +17,7 @@ import {
   TxPushType,
 } from 'background/service/openapi';
 import { findChain } from './chain';
+import { shouldWarnReservedGasLimitTooHigh } from './gasGuards';
 import type { WalletControllerType } from '@/ui/utils';
 import { Chain } from '@debank/common';
 import i18n from '@/i18n';
@@ -260,8 +261,17 @@ export async function calcGasLimit({
     // NOTHING
   }
 
+  // Native EOA transfer fast-path: when the RPC estimate is exactly 21000
+  // (the protocol minimum, returned for a value transfer to an EOA with no
+  // calldata) submit exactly 21000 with no ratio. The buffer would just be
+  // deadweight — the gas amount is fixed by protocol and can't be exceeded.
+  const isNativeTransfer =
+    (!tx.data || tx.data === '0x' || tx.data === '0x0') && gas.eq(21000);
+
   // use server response gas limit
-  let ratio = SAFE_GAS_LIMIT_RATIO[chain.id] || DEFAULT_GAS_LIMIT_RATIO;
+  let ratio = isNativeTransfer
+    ? 1
+    : SAFE_GAS_LIMIT_RATIO[chain.id] || DEFAULT_GAS_LIMIT_RATIO;
   const sendNativeTokenAmount = checkTxValueInBalance
     ? rawAmountToBn(tx.value || 0).div(1e18)
     : new BigNumber(0);
@@ -275,7 +285,7 @@ export async function calcGasLimit({
     .div(1e18)
     .plus(sendNativeTokenAmount)
     .isGreaterThan(gasTokenBalanceAmount);
-  if (gasNotEnough) {
+  if (gasNotEnough && !isNativeTransfer) {
     ratio = explainTx.gas.gas_ratio;
   }
   const recommendGasLimitRatio = needRatio ? ratio : 1;
@@ -563,6 +573,20 @@ export const checkGasAndNonce = ({
         });
       }
     }
+  }
+  if (
+    !isGnosisAccount &&
+    shouldWarnReservedGasLimitTooHigh({
+      chainId: tx.chainId,
+      gasLimit,
+      recommendGasLimit,
+    })
+  ) {
+    errors.push({
+      code: 3007,
+      msg: i18n.t('page.signTx.gasLimitMuchHigherThanGasUsed'),
+      level: 'warn',
+    });
   }
   const balanceRawAmount = rawAmountToBn(nativeTokenBalance || 0);
   const sendNativeTokenRawAmount = checkTxValueInBalance
