@@ -1271,6 +1271,11 @@ export const SAFE_GAS_LIMIT_RATIO = {
   '1284': 2,
   '1285': 2,
   '1287': 2,
+  // Monad charges the reserved gasLimit (excess over gas_used is paid as a
+  // priority-fee surcharge), and its RPC already pads eth_estimateGas by ~25-30 %.
+  // 1.075 keeps a small safety margin without billing the user for unused gas.
+  '143': 1.075,
+  '10143': 1.075,
 };
 
 export const SAFE_GAS_LIMIT_BUFFER = {

@@ -31,6 +31,8 @@ import {
   CAN_ESTIMATE_L1_FEE_CHAINS,
   CAN_NOT_SPECIFY_INTRINSIC_GAS_CHAINS,
   KEYRING_TYPE,
+  DEFAULT_GAS_LIMIT_RATIO,
+  SAFE_GAS_LIMIT_RATIO,
 } from 'consts';
 import { useRabbyDispatch, connectStore, useRabbySelector } from 'ui/store';
 import {
@@ -1441,10 +1443,17 @@ const SendToken = () => {
         console.error(err);
       }
 
-      const gasUsed = new BigNumber(_gasUsed)
-        .multipliedBy(1.5)
-        .integerValue()
-        .toNumber();
+      const baseGas = new BigNumber(_gasUsed);
+      const isNativeIntrinsic = baseGas.eq(21000);
+      const gasUsed = isNativeIntrinsic
+        ? baseGas.toNumber()
+        : baseGas
+            .multipliedBy(
+              SAFE_GAS_LIMIT_RATIO[lastestChainItem.id] ||
+                DEFAULT_GAS_LIMIT_RATIO
+            )
+            .integerValue()
+            .toNumber();
 
       return doReturn(Number(gasUsed));
     },

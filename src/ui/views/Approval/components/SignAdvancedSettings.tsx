@@ -3,7 +3,7 @@ import { Button, Form, Input, InputRef, Tooltip } from 'antd';
 import { ValidateStatus } from 'antd/lib/form/FormItem';
 import BigNumber from 'bignumber.js';
 import clsx from 'clsx';
-import { MINIMUM_GAS_LIMIT } from 'consts';
+import { DEFAULT_GAS_LIMIT_RATIO, MINIMUM_GAS_LIMIT } from 'consts';
 import React, { useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Popup } from 'ui/component';
@@ -39,6 +39,7 @@ interface GasSelectorProps {
   disableNonce: boolean;
   disabled?: boolean;
   manuallyChangeGasLimit: boolean;
+  recommendRatio?: number;
 }
 
 export const SignAdvancedSettings = ({
@@ -51,6 +52,7 @@ export const SignAdvancedSettings = ({
   disableNonce,
   disabled,
   manuallyChangeGasLimit,
+  recommendRatio = DEFAULT_GAS_LIMIT_RATIO,
 }: GasSelectorProps) => {
   const gasLimitInputRef = React.useRef<InputRef>(null);
   const [visible, setVisible] = React.useState(false);
@@ -75,7 +77,9 @@ export const SignAdvancedSettings = ({
 
   const handleSetRecommendTimes = () => {
     if (disabled) return;
-    const value = new BigNumber(recommendGasLimit).times(1.5).toFixed(0);
+    const value = new BigNumber(recommendGasLimit)
+      .times(recommendRatio)
+      .toFixed(0);
     setGasLimit(value);
   };
 
@@ -238,14 +242,16 @@ export const SignAdvancedSettings = ({
                         est: Number(recommendGasLimit),
                         current: new BigNumber(afterGasLimit)
                           .div(recommendGasLimit)
-                          .toFixed(1),
+                          .toFixed(3)
+                          .replace(/0+$/, '')
+                          .replace(/\.$/, ''),
                       }}
                     />
                     <span
                       className="recommend-times"
                       onClick={handleSetRecommendTimes}
                     >
-                      1.5x
+                      {recommendRatio}x
                     </span>
                     .
                   </p>

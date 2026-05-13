@@ -22,6 +22,7 @@ import {
   KEYRING_TYPE,
   MINIMUM_GAS_LIMIT,
   SAFE_GAS_LIMIT_BUFFER,
+  SAFE_GAS_LIMIT_RATIO,
 } from '@/constant';
 import { useEnterPassphraseModal } from '@/ui/hooks/useEnterPassphraseModal';
 import { GasLevel, Tx } from '@rabby-wallet/rabby-api/dist/types';
@@ -186,6 +187,7 @@ const useCheckGasAndNonce = ({
       isSpeedUp,
       isGnosisAccount,
       nativeTokenBalance,
+      recommendGasLimitRatio,
     ]
   );
 };
@@ -308,8 +310,14 @@ export const SignTestnetTx = ({
         let recommendGasLimit = estimateGas;
 
         if (!gasLimit) {
+          const isNativeTransfer =
+            (!tx.data || tx.data === '0x' || tx.data === '0x0') &&
+            new BigNumber(estimateGas).eq(21000);
+          const ratio = isNativeTransfer
+            ? 1
+            : SAFE_GAS_LIMIT_RATIO[chainId] || DEFAULT_GAS_LIMIT_RATIO;
           recommendGasLimit = new BigNumber(estimateGas)
-            .times(DEFAULT_GAS_LIMIT_RATIO)
+            .times(ratio)
             .toFixed(0);
 
           if (
@@ -835,6 +843,13 @@ export const SignTestnetTx = ({
     });
   };
 
+  const isNativeTransferEstimate =
+    (!tx.data || tx.data === '0x' || tx.data === '0x0') &&
+    new BigNumber(gasUsed || 0).eq(21000);
+  const recommendRatio = isNativeTransferEstimate
+    ? 1
+    : SAFE_GAS_LIMIT_RATIO[chainId] || DEFAULT_GAS_LIMIT_RATIO;
+
   const checkErrors = useCheckGasAndNonce({
     recommendGasLimit: gasUsed || 0,
     recommendNonce: recommendNonce || '',
@@ -848,7 +863,7 @@ export const SignTestnetTx = ({
     tx,
     isGnosisAccount: isGnosisAccount || isCoboArugsAccount,
     nativeTokenBalance,
-    recommendGasLimitRatio: 1.5,
+    recommendGasLimitRatio: recommendRatio,
   });
 
   useSetReportGasLevel(selectedGas?.level);
@@ -887,6 +902,7 @@ export const SignTestnetTx = ({
             nonce={realNonce || tx.nonce}
             disableNonce={isSpeedUp || isCancel}
             manuallyChangeGasLimit={false}
+            recommendRatio={recommendRatio}
           />
         )}
 
