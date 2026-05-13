@@ -1,7 +1,7 @@
 import { Tx } from '@rabby-wallet/rabby-api/dist/types';
 import { INTERNAL_REQUEST_SESSION } from '@/constant';
 import providerController from '../../../controller/provider/controller';
-import { PrestateDiff, TraceResult } from '../types';
+import { CallFrame, PrestateDiff, TraceResult } from '../types';
 
 type TraceCallParams = [
   Record<string, string | undefined>,
@@ -77,6 +77,28 @@ export const tracePrestateDiff = async (
   const v = res.value;
   if (!v || typeof v !== 'object' || !v.pre || !v.post) {
     return { kind: 'error', message: 'unexpected prestate trace shape' };
+  }
+  return { kind: 'ok', value: v };
+};
+
+export const traceCallTracer = async (
+  chainServerId: string,
+  tx: Tx
+): Promise<TraceResult<CallFrame>> => {
+  const params: TraceCallParams = [
+    buildTraceTx(tx),
+    'latest',
+    { tracer: 'callTracer', tracerConfig: { withLog: true } },
+  ];
+  const res = await rawRpc<CallFrame>(
+    chainServerId,
+    'debug_traceCall',
+    (params as unknown) as unknown[]
+  );
+  if (res.kind === 'error') return res;
+  const v = res.value;
+  if (!v || typeof v !== 'object') {
+    return { kind: 'error', message: 'unexpected call trace shape' };
   }
   return { kind: 'ok', value: v };
 };

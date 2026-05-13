@@ -1,10 +1,14 @@
 import { findChain } from '@/utils/chain';
+import BigNumber from 'bignumber.js';
 import { getPolicy } from './chainPolicy';
 import { probeDebugTraceCall } from './rpc/capabilityProbe';
-import { tracePrestateDiff } from './rpc/traceCall';
+import { traceCallTracer, tracePrestateDiff } from './rpc/traceCall';
 import { extractNativeDeltas } from './decode/nativeDelta';
+import { extractErc20Deltas } from './decode/transferEvents';
+import { fetchManyTokenMeta } from './tokenMetadata/fetch';
 import {
   synthesizeFailedBalanceChange,
+  synthesizeContractBalanceChange,
   synthesizeNativeBalanceChange,
 } from './synthesize/balanceChange';
 import { LocalSimulationInput, LocalSimulationResult } from './types';
@@ -76,36 +80,92 @@ export const simulate = async (
     return null;
   }
 
-  // Contract calls require ERC-20 log decode + token metadata resolution,
-  // which land in a follow-up commit. Native transfers only for now.
-  if (!isEmptyData(tx.data)) {
-    log('bail: contract calls not yet handled by local-trace');
+  if (isEmptyData(tx.data)) {
+    const diff = await tracePrestateDiff(serverId, tx);
+    if (diff.kind === 'error') {
+      log('fail: native trace error', diff);
+      return failedSimulationResult(diff.message, diff.code);
+    }
+    const deltas = extractNativeDeltas(diff.value);
+    log('native path: deltas', { count: deltas.length, deltas });
+    if (deltas.length === 0) {
+      log('bail: no native deltas extracted');
+      return null;
+    }
+    const balanceChange = synthesizeNativeBalanceChange({
+      chain,
+      userAddress,
+      txValue: tx.value || '0x0',
+      txTo: tx.to,
+      deltas,
+    });
+    if (!balanceChange) {
+      log('bail: native synthesize returned null (user not in deltas?)');
+      return null;
+    }
+    log('ok: native', balanceChange);
+    return {
+      balanceChange,
+      version: 'v1',
+      source: 'local-trace',
+    };
+  }
+
+  // Contract call: run callTracer + prestateTracer in parallel.
+  const [callRes, prestateRes] = await Promise.all([
+    traceCallTracer(serverId, tx),
+    tracePrestateDiff(serverId, tx),
+  ]);
+  if (callRes.kind === 'error') {
+    log('fail: contract callTracer error', callRes);
+    return failedSimulationResult(callRes.message, callRes.code);
+  }
+  if (callRes.value.error) {
+    log('fail: contract call reverted', { error: callRes.value.error });
+    return failedSimulationResult(callRes.value.error);
+  }
+  if (prestateRes.kind === 'error') {
+    log('fail: contract prestateTracer error', prestateRes);
+    return failedSimulationResult(prestateRes.message, prestateRes.code);
+  }
+
+  const userLower = userAddress.toLowerCase();
+  const nativeDeltas = extractNativeDeltas(prestateRes.value);
+  const userNativeDelta = nativeDeltas.find((d) => d.address === userLower);
+  const erc20Deltas = extractErc20Deltas(callRes.value);
+  const userErc20 = erc20Deltas.filter((d) => d.address === userLower);
+  const txValue = tx.value || '0x0';
+  log('contract path', {
+    nativeDeltas: nativeDeltas.length,
+    erc20Deltas: erc20Deltas.length,
+    userErc20: userErc20.length,
+    txValue,
+  });
+
+  if (
+    !userNativeDelta &&
+    userErc20.length === 0 &&
+    !new BigNumber(txValue).gt(0)
+  ) {
+    log('bail: no user activity in trace');
     return null;
   }
 
-  const diff = await tracePrestateDiff(serverId, tx);
-  if (diff.kind === 'error') {
-    log('fail: native trace error', diff);
-    return failedSimulationResult(diff.message, diff.code);
-  }
-  const deltas = extractNativeDeltas(diff.value);
-  log('native path: deltas', { count: deltas.length, deltas });
-  if (deltas.length === 0) {
-    log('bail: no native deltas extracted');
-    return null;
-  }
-  const balanceChange = synthesizeNativeBalanceChange({
+  const tokens = Array.from(new Set(userErc20.map((d) => d.token)));
+  const metaByToken =
+    tokens.length === 0
+      ? new Map()
+      : await fetchManyTokenMeta(chainId, serverId, tokens);
+
+  const balanceChange = synthesizeContractBalanceChange({
     chain,
     userAddress,
-    txValue: tx.value || '0x0',
-    txTo: tx.to,
-    deltas,
+    txValue,
+    nativeDeltas,
+    erc20Deltas: userErc20,
+    metaByToken,
   });
-  if (!balanceChange) {
-    log('bail: native synthesize returned null (user not in deltas?)');
-    return null;
-  }
-  log('ok: native', balanceChange);
+  log('ok: contract', balanceChange);
   return {
     balanceChange,
     version: 'v1',
