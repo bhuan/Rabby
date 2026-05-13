@@ -78,6 +78,8 @@ import { useEnterPassphraseModal } from '@/ui/hooks/useEnterPassphraseModal';
 import { findChain, isTestnet } from '@/utils/chain';
 import { SignTestnetTx } from './SignTestnetTx';
 import { SignAdvancedSettings } from './SignAdvancedSettings';
+import { GasOverspendBanner } from './GasOverspendBanner';
+import { useGasOverspendAck } from './useGasOverspendAck';
 import { GasSelectorResponse } from './TxComponents/GasSelectorHeader';
 import SignMainnetGasSelectorHeader from './TxComponents/GasSelector/SignMainnetGasSelectorHeader';
 import { useEffectiveApprovalGasMethod } from './TxComponents/GasSelector/useEffectiveApprovalGasMethod';
@@ -867,6 +869,8 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
   const isGasNotEnough = useMemo(() => {
     return checkErrors.some((e) => e.code === 3001);
   }, [checkErrors]);
+
+  const gasOverspendAck = useGasOverspendAck({ gasLimit, checkErrors });
 
   const isSupportedAddr = useMemo(() => {
     const isNotWalletConnect =
@@ -2722,6 +2726,14 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
           />
         ) : null}
 
+        {isReady && gasOverspendAck.warning && (
+          <GasOverspendBanner
+            message={gasOverspendAck.warning}
+            acknowledged={gasOverspendAck.acknowledged}
+            onChange={gasOverspendAck.setAcknowledged}
+          />
+        )}
+
         {!isGnosisAccount && !isCoboArugsAccount && txDetail && isReady ? (
           <SignAdvancedSettings
             disabled={isGnosisAccount || isCoboArugsAccount}
@@ -2733,10 +2745,6 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
             nonce={realNonce || tx.nonce}
             disableNonce={isSpeedUp || isCancel}
             manuallyChangeGasLimit={manuallyChangeGasLimit}
-            gasLimitWarning={
-              checkErrors.find((e) => e.code === 3007 && e.level === 'warn')
-                ?.msg || null
-            }
           />
         ) : null}
 
@@ -2951,6 +2959,7 @@ const SignTx = ({ params, origin, account: $account }: SignTxProps) => {
               !canProcess ||
               !!checkErrors.find((item) => item.level === 'forbidden') ||
               hasUnProcessSecurityResult ||
+              gasOverspendAck.blockSubmit ||
               (isGnosisAccount &&
                 new BigNumber(realNonce || 0).isLessThan(safeInfo?.nonce || 0))
             }

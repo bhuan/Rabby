@@ -38,6 +38,8 @@ import GasSelectorHeader, {
 import { MessageWrapper } from '../TextActions';
 import { Card } from '../Card';
 import { SignAdvancedSettings } from '../SignAdvancedSettings';
+import { GasOverspendBanner } from '../GasOverspendBanner';
+import { useGasOverspendAck } from '../useGasOverspendAck';
 import clsx from 'clsx';
 import { Modal } from 'antd';
 import { ga4 } from '@/utils/ga4';
@@ -896,6 +898,8 @@ export const SignTestnetTx = ({
 
   useSetReportGasLevel(selectedGas?.level);
 
+  const gasOverspendAck = useGasOverspendAck({ gasLimit, checkErrors });
+
   if (!chain) {
     return null;
   }
@@ -921,6 +925,14 @@ export const SignTestnetTx = ({
           onChange={handleTxChange}
         />
 
+        {isReady && gasOverspendAck.warning && (
+          <GasOverspendBanner
+            message={gasOverspendAck.warning}
+            acknowledged={gasOverspendAck.acknowledged}
+            onChange={gasOverspendAck.setAcknowledged}
+          />
+        )}
+
         {isReady && (
           <SignAdvancedSettings
             isReady={isReady}
@@ -932,10 +944,6 @@ export const SignTestnetTx = ({
             disableNonce={isSpeedUp || isCancel}
             manuallyChangeGasLimit={false}
             recommendRatio={recommendRatio}
-            gasLimitWarning={
-              checkErrors.find((e) => e.code === 3007 && e.level === 'warn')
-                ?.msg || null
-            }
           />
         )}
 
@@ -1025,7 +1033,8 @@ export const SignTestnetTx = ({
           isGnosisAccount ||
           isCoboArugsAccount ||
           !canProcess ||
-          !!checkErrors.find((item) => item.level === 'forbidden')
+          !!checkErrors.find((item) => item.level === 'forbidden') ||
+          gasOverspendAck.blockSubmit
         }
         account={currentAccount}
       />
