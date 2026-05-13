@@ -159,6 +159,11 @@ import {
   customTestnetService,
   fakeTestnetOpenapi,
 } from '../service/customTestnet';
+import {
+  simulate as simulateLocallyService,
+  LocalSimulationInput,
+  invalidateProbe as invalidateLocalSimulationProbe,
+} from '../service/localSimulation';
 import { getKeyringBridge, hasBridge } from '../service/keyring/bridge';
 import { syncChainService } from '../service/syncChain';
 import { matomoRequestEvent } from '@/utils/matomo-request';
@@ -2658,6 +2663,10 @@ export class WalletController extends BaseController {
     if (chain?.isTestnet && RPCService.hasCustomRPC(chainEnum)) {
       customTestnetService.setCustomRPC({ chainId: chain.id, url: url });
     }
+    // Probe cache is keyed by serverId; invalidate on any RPC override
+    // (mainnet or testnet) so the next simulate() call re-probes
+    // debug_traceCall support against the new endpoint.
+    if (chain) invalidateLocalSimulationProbe(chain.serverId);
   };
   removeCustomRPC = (chainEnum: CHAINS_ENUM) => {
     RPCService.removeCustomRPC(chainEnum);
@@ -2667,6 +2676,7 @@ export class WalletController extends BaseController {
     if (chain?.isTestnet) {
       customTestnetService.removeCustomRPC(chain.id);
     }
+    if (chain) invalidateLocalSimulationProbe(chain.serverId);
   };
   getAllCustomRPC = RPCService.getAllRPC;
   getCustomRpcByChain = RPCService.getRPCByChain;
@@ -2686,6 +2696,7 @@ export class WalletController extends BaseController {
         customTestnetService.removeCustomRPC(chain.id);
       }
     }
+    if (chain) invalidateLocalSimulationProbe(chain.serverId);
   };
   validateRPC = async (url: string, chainId: number) => {
     const chain = findChain({
@@ -6384,6 +6395,9 @@ export class WalletController extends BaseController {
   };
 
   parseCustomNetworkTx = customTestnetService.parseTx;
+
+  simulateLocally = (input: LocalSimulationInput) =>
+    simulateLocallyService(input);
 
   hasPrivateKeyInWallet = async (address: string) => {
     let pk: any = null;

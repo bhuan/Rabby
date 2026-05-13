@@ -1,0 +1,117 @@
+import { findChain } from '@/utils/chain';
+import { getPolicy } from './chainPolicy';
+import { probeDebugTraceCall } from './rpc/capabilityProbe';
+import { tracePrestateDiff } from './rpc/traceCall';
+import { extractNativeDeltas } from './decode/nativeDelta';
+import {
+  synthesizeFailedBalanceChange,
+  synthesizeNativeBalanceChange,
+} from './synthesize/balanceChange';
+import { LocalSimulationInput, LocalSimulationResult } from './types';
+
+const isEmptyData = (data?: string) => !data || data === '0x' || data === '0x0';
+
+// Verbose simulator tracing. Off by default — tx payloads, user addresses,
+// and decoded deltas shouldn't land in production extension logs. Flip on
+// from the background-SW devtools with
+//   globalThis.__rabbyDebugLocalSim__ = true
+// when triaging a sim issue.
+const log = (...args: unknown[]) => {
+  if (
+    (globalThis as { __rabbyDebugLocalSim__?: boolean })
+      .__rabbyDebugLocalSim__
+  ) {
+    console.info('[local-sim]', ...args);
+  }
+};
+
+// Geth-style JSON-RPC error code for "execution reverted" — what most wallets
+// surface for a normal revert. Reserve -32603 ("internal error") for cases
+// where the trace ran but produced an unexpected error shape.
+const REVERT_ERROR_CODE = 3;
+const INTERNAL_ERROR_CODE = -32603;
+
+const isRevert = (msg: string) => /reverted|revert/i.test(msg);
+
+const failedSimulationResult = (
+  msg: string,
+  code?: number
+): LocalSimulationResult => ({
+  balanceChange: synthesizeFailedBalanceChange({
+    code: code ?? (isRevert(msg) ? REVERT_ERROR_CODE : INTERNAL_ERROR_CODE),
+    msg,
+  }),
+  version: 'v1',
+  source: 'local-trace',
+});
+
+export const simulate = async (
+  input: LocalSimulationInput
+): Promise<LocalSimulationResult | null> => {
+  const { chainId, tx, userAddress } = input;
+  log('start', { chainId, tx, userAddress });
+  const policy = getPolicy(chainId);
+  if (!policy || !policy.providers.includes('local-trace')) {
+    log('bail: chain not in policy or local-trace not enabled', { chainId });
+    return null;
+  }
+
+  const chain = findChain({ id: chainId });
+  if (!chain) {
+    log('bail: findChain returned null', { chainId });
+    return null;
+  }
+  if (!tx.to) {
+    log('bail: tx.to missing');
+    return null;
+  }
+  const serverId = chain.serverId;
+
+  const supported = await probeDebugTraceCall(serverId);
+  if (!supported) {
+    log('bail: debug_traceCall probe failed for this chain/RPC', {
+      chainId,
+      serverId,
+    });
+    return null;
+  }
+
+  // Contract calls require ERC-20 log decode + token metadata resolution,
+  // which land in a follow-up commit. Native transfers only for now.
+  if (!isEmptyData(tx.data)) {
+    log('bail: contract calls not yet handled by local-trace');
+    return null;
+  }
+
+  const diff = await tracePrestateDiff(serverId, tx);
+  if (diff.kind === 'error') {
+    log('fail: native trace error', diff);
+    return failedSimulationResult(diff.message, diff.code);
+  }
+  const deltas = extractNativeDeltas(diff.value);
+  log('native path: deltas', { count: deltas.length, deltas });
+  if (deltas.length === 0) {
+    log('bail: no native deltas extracted');
+    return null;
+  }
+  const balanceChange = synthesizeNativeBalanceChange({
+    chain,
+    userAddress,
+    txValue: tx.value || '0x0',
+    txTo: tx.to,
+    deltas,
+  });
+  if (!balanceChange) {
+    log('bail: native synthesize returned null (user not in deltas?)');
+    return null;
+  }
+  log('ok: native', balanceChange);
+  return {
+    balanceChange,
+    version: 'v1',
+    source: 'local-trace',
+  };
+};
+
+export type { LocalSimulationInput, LocalSimulationResult } from './types';
+export { invalidateProbe } from './rpc/capabilityProbe';
